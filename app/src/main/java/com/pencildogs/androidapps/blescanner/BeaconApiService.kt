@@ -88,24 +88,30 @@ class BeaconApiService(private val baseUrl: String, private var authToken: Strin
                 connection.setRequestProperty("Authorization", "Bearer $authToken")
                 connection.doOutput = true
 
-                // Create array of beacon entries
-                val beaconsArray = JSONArray()
+                // Format the beacons as objects with beacon_uuid property
+                val formattedBeacons = JSONArray()
                 beaconUuids.forEach { uuid ->
-                    beaconsArray.put(uuid)
+                    formattedBeacons.put(JSONObject().apply {
+                        put("beacon_uuid", uuid)
+                    })
                 }
 
-                // Add our special test beacon if not already in the list
+                // Add our special test beacon if not already included
                 if (!beaconUuids.contains("PNCLDGS9-9999-9999-9999-999999999999")) {
-                    beaconsArray.put("PNCLDGS9-9999-9999-9999-999999999999")
+                    formattedBeacons.put(JSONObject().apply {
+                        put("beacon_uuid", "PNCLDGS9-9999-9999-9999-999999999999")
+                    })
                 }
 
-                // Create the JSON body
+                // Create the JSON body with all required fields
                 val data = JSONObject().apply {
-                    put("detector_id", scannerId)
-                    put("detector_name", scannerName)
+                    put("detector_uuid", scannerId)
+                    put("name", scannerName)
+                    put("location_type", "mobile")
+                    put("location_name", "Android Scanner $scannerId")
                     put("latitude", latitude)
                     put("longitude", longitude)
-                    put("beacons", beaconsArray)
+                    put("beacons", formattedBeacons)
                     put("timestamp", System.currentTimeMillis())
                 }
 
@@ -123,9 +129,6 @@ class BeaconApiService(private val baseUrl: String, private var authToken: Strin
                     val errorStream = connection.errorStream ?: connection.inputStream
                     val response = errorStream.bufferedReader().use { it.readText() }
 
-                    // Log the full error response
-                    Log.e(TAG, "Server error: $responseCode - $response")
-
                     // Check if token expired
                     if (responseCode == 401) {
                         // Token expired, try to get a new one
@@ -138,9 +141,6 @@ class BeaconApiService(private val baseUrl: String, private var authToken: Strin
                                 callback(false, "Token expired and re-authentication failed")
                             }
                         }
-                    }
-                    else if (responseCode == 500) {
-                        callback(false, "Server error (500): $response - Check server logs for details")
                     } else {
                         callback(false, "Error $responseCode: $response")
                     }
